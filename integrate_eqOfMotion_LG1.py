@@ -1,8 +1,9 @@
 import sys
 import pickle
-import imageio
 import numpy as np
+import imageio.v2 as imageio
 import matplotlib.pyplot as plt
+from collections import defaultdict
 from scipy.integrate import solve_ivp
 
 # Geometry and inertia
@@ -23,11 +24,11 @@ F = np.array([0, -m1*g, 0, 0, -m2*g, 0])
 # Initial conditions
 # - Position
 X0 = np.zeros(6)
-X0[2] = 85 * (np.pi/180) # 85°
+X0[2] = 85 * (np.pi/180) # 85
 X0[0] = (l1/2) * np.sin(X0[2])
 X0[1] = -(l1/2) * np.cos(X0[2])
 
-X0[5] = 70 * (np.pi/180) # 70°
+X0[5] = 70 * (np.pi/180) # 70
 X0[3] = (l1*np.sin(X0[2])) + (l2/2*np.sin(X0[5]))
 X0[4] = -(l1*np.cos(X0[2])) - (l2/2*np.cos(X0[5]))
 
@@ -36,17 +37,6 @@ Xd0 = np.zeros(6)
 
 # Initializing the state vector
 Y0 = np.concatenate((X0, Xd0))
-
-# # Quick plot to check initial conditions
-# rod2_end = np.zeros(2)
-# rod2_end[0] = l1*np.sin(X0[2]) + l2*np.sin(X0[5])
-# rod2_end[1] = -(l1*np.cos(X0[2])) - (l2*np.cos(X0[5]))
-# plt.plot([0, X0[0], X0[0]*2], [0, X0[1], X0[1]*2], 'o-')
-# plt.plot([X0[0]*2, X0[3], rod2_end[0]], [X0[1]*2, X0[4], rod2_end[1]], 'o-')
-# plt.axis("scaled")
-# plt.xlim((-0.6, 0.6))
-# plt.ylim((-0.7, 0.0))
-# plt.show()
 
 def getJacobian(x):
     x1 = x[0]; y1 = x[1]; phi1 = x[2]
@@ -114,6 +104,18 @@ def getConstraintsDot(x, xd):
 # Baumgarte-Stabilization Parameters
 alpha = 100
 beta = 100
+
+# Integration
+dt = 0.001
+tspan = np.arange(0, 5.001, dt)
+
+# Reaction forces
+R = []
+# Lambdas (Lagrange multiplicators)
+L = []
+# Accelerations
+Xddarray = []
+
 def getYd(t, Y_):
     X = Y_[0:6]
     Xd = Y_[6:12]
@@ -127,19 +129,22 @@ def getYd(t, Y_):
     J_T = np.transpose(J)
     invM = np.linalg.inv(M)
 
-    Xdd_sub = np.matmul(
-        np.matmul(
-            J_T, np.linalg.inv(np.matmul(J, np.matmul(invM, J_T)))
-        ),
+    # Lagrange multiplicator
+    Lm = np.matmul(
+        np.linalg.inv(np.matmul(J, np.matmul(invM, J_T))),
         (np.matmul(J, np.matmul(invM, F)) + Jbg)
     )
-    Xdd = np.matmul(invM, F - Xdd_sub)
+    L.append(Lm)
+
+    # Reaction forces
+    R.append(np.matmul(J_T, Lm))
+
+    Xdd = np.matmul(invM, F - np.matmul(J_T, Lm))
+    Xddarray.append(Xdd)
 
     return np.concatenate((Xd, Xdd))
 
 # Integration
-dt = 0.001
-tspan = np.arange(0, 5.001, dt)
 sol = solve_ivp(
     getYd, [0.0, 5.0], Y0, t_eval=tspan, rtol=1e-8, atol=1e-12
 )
@@ -147,22 +152,29 @@ sol = solve_ivp(
 X_t = sol.y[0:6, :]
 Xd_t = sol.y[6:, :]
 
-with open("integratedCoordinates.pkl", 'wb') as handle:
-    pickle.dump(sol.y, handle)
+to_save = {
+    "t_eval": sol.t,
+    "integratedCoordinates": sol.y,
+    "lambdas": L,
+    "reactionForces": R,
+    "Xdd": Xddarray
+}
+with open("savedResults.pkl", 'wb') as handle:
+    pickle.dump(to_save, handle)
 
 # Check that constraint equations are always zero
 F_t = getConstraints(X_t)
-fig2, axs2 = plt.subplots(1, 1)
-axs2.plot(tspan, F_t[0,:], label=r"$f_1 (t)$")
-axs2.plot(tspan, F_t[1,:], label=r"$f_2 (t)$")
-axs2.plot(tspan, F_t[2,:], label=r"$f_3 (t)$")
-axs2.plot(tspan, F_t[3,:], label=r"$f_4 (t)$")
-axs2.grid(visible=True, which="major")
-axs2.set_ylabel(r"$f$", rotation=0, y=0.9, labelpad=9.0)
-axs2.set_xlabel(r"Time ($s$)")
-axs2.legend()
-
-fig2.tight_layout()
+fig1, axs1 = plt.subplots(1, 1)
+axs1.plot(tspan, F_t[0,:], label=r"$f_1 (t)$")
+axs1.plot(tspan, F_t[1,:], label=r"$f_2 (t)$")
+axs1.plot(tspan, F_t[2,:], label=r"$f_3 (t)$")
+axs1.plot(tspan, F_t[3,:], label=r"$f_4 (t)$")
+axs1.grid(visible=True, which="major")
+axs1.set_ylabel(r"$f$", rotation=0, y=0.9, labelpad=9.0)
+axs1.set_xlabel(r"Time ($s$)")
+axs1.set_title("Progression of constraint equations", loc="left")
+axs1.legend()
+fig1.tight_layout()
 
 # Animation
 fps = 175
@@ -180,7 +192,7 @@ def make_plot(t_i, _frames):
     # End of Pendulum 2
     end2x = x1*2 + (l2*np.sin(X_t[5, t_i]))
     end2y = y1*2 - (l2*np.cos(X_t[5, t_i]))
-    
+
     # Plot
     ax.plot([0, x1*2], [0, y1*2], 'o-', markersize=12)
     ax.plot([x1*2, end2x], [y1*2, end2y], 'o-', markersize=12)
@@ -206,7 +218,7 @@ for i in range(0, int((tspan.size)/2), step_perFrame):
 
 imageio.mimsave(f"Lagrange1_alpha{alpha}beta{beta}.gif", frames, loop=1)
 
-fig2.show()
+fig1.show()
 input("Press ENTER to quit ... ")
 
 sys.exit(0)
