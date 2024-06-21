@@ -194,6 +194,7 @@ def make_plot(t_i, _frames):
     end2y = y1*2 - (l2*np.cos(X_t[5, t_i]))
 
     # Plot
+    fig, ax = plt.subplots(1, 1, figsize=(6.4, 3.35))
     ax.plot([0, x1*2], [0, y1*2], 'o-', markersize=12)
     ax.plot([x1*2, end2x], [y1*2, end2y], 'o-', markersize=12)
     ax.plot([x1], [y1], 'o', markersize=12, color='black')
@@ -203,14 +204,15 @@ def make_plot(t_i, _frames):
     ax.set_aspect("equal", adjustable="box")
 
     ax.set_xlim([-2.05*l1, 2.05*l1])
+    ax.set_xlabel(r"$x (m)$")
     ax.set_ylim([-2.05*l1, 0.25*l1])
-    plt.grid(visible=True)
-    plt.savefig('frames/_img{:04d}.png'.format(t_i//step_perFrame), dpi=72)
+    ax.set_ylabel(r"$y (m)$")
+    ax.grid(visible=True)
+    plt.tight_layout()
+    fig.savefig('frames/_img{:04d}.png'.format(t_i//step_perFrame), dpi=72)
     image = imageio.imread('frames/_img{:04d}.png'.format(t_i//step_perFrame))
     _frames.append(image)
-    plt.cla()
-
-fig, ax = plt.subplots(1,1, figsize=(9,9))
+    plt.close()
 
 frames = []
 for i in range(0, int((tspan.size)/2), step_perFrame):
