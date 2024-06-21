@@ -5,7 +5,7 @@ The equation of motions were first modelled according to the formulation of the 
 
 $$
 \begin{bmatrix}M & {J_F}^T \\\ J_F & 0 \end{bmatrix}\begin{bmatrix}\ddot{x} \\\ \lambda\end{bmatrix} =
-\begin{bmatrix}F \\\ -\dot{J}_F \lambda \end{bmatrix} \,
+\begin{bmatrix}F \\\ -\dot{J}_F \dot{x} \end{bmatrix} \,
 $$
 
 where $M$ represents the mass matrix, $J_F$ the Jacobian of the constraint equations, and $F$ the external force vector. By integrating the equation of motions above, one obtains the positions and velocities in time (details in code).
